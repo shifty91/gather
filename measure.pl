@@ -11,7 +11,7 @@ use strict;
 use FindBin;
 use Data::Dumper;
 
-my (%supported_archs, %supported_cxx, %perf_data, @archs);
+my (%supported_archs, %supported_cxx, %perf_data);
 
 sub func_arch_to_real_arch
 {
@@ -82,6 +82,8 @@ sub benchmark
 
     # build statistics and print it
     print_statistics();
+
+    return;
 }
 
 sub get_supported_architectures
@@ -169,7 +171,7 @@ sub build_data_files
 
     foreach my $cxx (sort keys %perf_data) {
         foreach my $arch (sort keys %{$perf_data{$cxx}}) {
-            my ($fh_gather, $fh_scatter, @funcs, @funcs_gather, @funcs_scatter, $i);
+            my ($fh_gather, $fh_scatter, @funcs, @funcs_gather, @funcs_scatter);
 
             open($fh_gather, ">", "data/data_gather_$arch" . "_$cxx")
                 || die("Cannot open data gather file: $!");
@@ -181,7 +183,7 @@ sub build_data_files
             @funcs_scatter = grep { $_ =~ /scatter/ } @funcs;
             print $fh_gather  "# run @funcs_gather\n";
             print $fh_scatter "# run @funcs_scatter\n";
-            for $i (0..@{$perf_data{$cxx}{$arch}{$funcs[0]}}-1) {
+            for my $i (0..@{$perf_data{$cxx}{$arch}{$funcs[0]}}-1) {
                 my (@line_gather, @line_scatter);
                 foreach my $func (@funcs_gather) {
                     push(@line_gather, $perf_data{$cxx}{$arch}{$func}->[$i]);
@@ -197,6 +199,8 @@ sub build_data_files
             close $fh_scatter;
         }
     }
+
+    return;
 }
 
 sub print_statistics
