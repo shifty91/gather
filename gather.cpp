@@ -753,6 +753,81 @@ scatter_sse4_float_store(const __m128& value, float *ptr, const unsigned *offset
     ptr[offsets[3]] = tmp[3];
     PERF_END;
 }
+
+__m128i __attribute__((noinline))
+gather_sse4_int_load(const std::int32_t *ptr, const unsigned *offsets)
+{
+    __m128i result;
+    PERF_START;
+    int tmp[4] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]],
+                                                 ptr[offsets[2]], ptr[offsets[3]] };
+    result = _mm_load_si128(reinterpret_cast<const __m128i *>(tmp));
+    PERF_END;
+
+    return result;
+}
+
+__m128i __attribute__((noinline))
+gather_sse4_int_set(const std::int32_t *ptr, const unsigned *offsets)
+{
+    __m128i result;
+    PERF_START;
+    result = _mm_set_epi32(ptr[offsets[3]], ptr[offsets[2]],
+                           ptr[offsets[1]], ptr[offsets[0]]);
+    PERF_END;
+
+    return result;
+}
+
+__m128i __attribute__((noinline))
+gather_sse4_int_insert(const std::int32_t *ptr, const unsigned *offsets)
+{
+    __m128i result;
+    PERF_START;
+    result = _mm_insert_epi32(result, ptr[offsets[0]], 0);
+    result = _mm_insert_epi32(result, ptr[offsets[1]], 1);
+    result = _mm_insert_epi32(result, ptr[offsets[2]], 2);
+    result = _mm_insert_epi32(result, ptr[offsets[3]], 3);
+    PERF_END;
+
+    return result;
+}
+
+void __attribute__((noinline))
+scatter_sse4_int_store(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    std::int32_t tmp[4] __attribute__((aligned (16)));
+    _mm_store_si128(reinterpret_cast<__m128i *>(tmp), value);
+    ptr[offsets[0]] = tmp[0];
+    ptr[offsets[1]] = tmp[1];
+    ptr[offsets[2]] = tmp[2];
+    ptr[offsets[3]] = tmp[3];
+    PERF_END;
+}
+
+void __attribute__((noinline))
+scatter_sse4_int_cast(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    const std::int32_t *p = reinterpret_cast<const std::int32_t *>(&value);
+    ptr[offsets[0]] = p[0];
+    ptr[offsets[1]] = p[1];
+    ptr[offsets[2]] = p[2];
+    ptr[offsets[3]] = p[3];
+    PERF_END;
+}
+
+void __attribute__((noinline))
+scatter_sse4_int_extract(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    ptr[offsets[0]] = _mm_extract_epi32(value, 0);
+    ptr[offsets[1]] = _mm_extract_epi32(value, 1);
+    ptr[offsets[2]] = _mm_extract_epi32(value, 2);
+    ptr[offsets[3]] = _mm_extract_epi32(value, 3);
+    PERF_END;
+}
 #endif
 
 // SSE section
@@ -1137,14 +1212,17 @@ int main(int argc, char *argv[])
 
 #ifdef __SSE4_1__
     {
-        __m128d r1 = gather_sse4_double_insert(doubles, idx);
-        __m128d r2 = gather_sse4_double_load(doubles, idx);
-        __m128d r3 = gather_sse4_double_set(doubles, idx);
-        __m128  r4 = gather_sse4_float_insert(floats, idx);
-        __m128  r5 = gather_sse4_float_insert2(floats, idx);
-        __m128  r6 = gather_sse4_float_insert3(floats, idx);
-        __m128  r7 = gather_sse4_float_set(floats, idx);
-        __m128  r8 = gather_sse4_float_load(floats, idx);
+        __m128d r1  = gather_sse4_double_insert(doubles, idx);
+        __m128d r2  = gather_sse4_double_load(doubles, idx);
+        __m128d r3  = gather_sse4_double_set(doubles, idx);
+        __m128  r4  = gather_sse4_float_insert(floats, idx);
+        __m128  r5  = gather_sse4_float_insert2(floats, idx);
+        __m128  r6  = gather_sse4_float_insert3(floats, idx);
+        __m128  r7  = gather_sse4_float_set(floats, idx);
+        __m128  r8  = gather_sse4_float_load(floats, idx);
+        __m128i r9  = gather_sse4_int_load(ints, idx);
+        __m128i r10 = gather_sse4_int_set(ints, idx);
+        __m128i r11 = gather_sse4_int_insert(ints, idx);
         std::cout << "SSE4: Gather: Double" << std::endl;
         print_vec_sse(r1);
         print_vec_sse(r2);
@@ -1155,6 +1233,10 @@ int main(int argc, char *argv[])
         print_vec_sse(r6);
         print_vec_sse(r7);
         print_vec_sse(r8);
+        std::cout << "SSE4: Gather: Int32" << std::endl;
+        print_vec_sse(r9);
+        print_vec_sse(r10);
+        print_vec_sse(r11);
         std::cout << "SSE4: Scatter: Double" << std::endl;
         SCATTER_DOUBLE(r1, scatter_sse4_double_extract);
         SCATTER_DOUBLE(r1, scatter_sse4_double_cast);
@@ -1164,6 +1246,10 @@ int main(int argc, char *argv[])
         SCATTER_FLOAT(r4, scatter_sse4_float_extract2);
         SCATTER_FLOAT(r4, scatter_sse4_float_cast);
         SCATTER_FLOAT(r4, scatter_sse4_float_store);
+        std::cout << "SSE4: Scatter: Int32" << std::endl;
+        SCATTER_INT32(r9, scatter_sse4_int_cast);
+        SCATTER_INT32(r9, scatter_sse4_int_store);
+        SCATTER_INT32(r9, scatter_sse4_int_extract);
     }
 #endif
 
