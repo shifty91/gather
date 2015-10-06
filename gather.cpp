@@ -3,8 +3,9 @@
  *
  * This program collects some ideas of how to implement gather
  * and scatter operations using vectorization (SSE/AVX/AVX512).
+ * Datatypes: Double, Float, Int32
  *
- * Runtime is measured by CPU cycles.
+ * Runtime is measured in CPU cycles.
  *
  */
 
@@ -17,8 +18,8 @@
 #ifdef __AVX__
 #include <immintrin.h>
 #endif
-#ifdef __SSE__
-#include <xmmintrin.h>
+#ifdef __SSE2__
+#include <emmintrin.h>
 #endif
 #ifdef __SSE4_1__
 #include <smmintrin.h>
@@ -81,7 +82,14 @@ void print_array(const TYPE *ptr, unsigned len)
         print_array(dscatter, LEN);                         \
     } while (0)
 
-#ifdef __SSE__
+#define SCATTER_INT32(value, method)                                \
+    do {                                                            \
+        std::memset(iscatter, '\0', sizeof(std::int32_t) * LEN);    \
+        method((value), iscatter, idx);                             \
+        print_array(iscatter, LEN);                                 \
+    } while (0)
+
+#ifdef __SSE2__
 // print __m** data types
 static
 void print_vec_sse(const __m128& vec)
@@ -97,6 +105,14 @@ void print_vec_sse(const __m128d& vec)
     const double *ptr = reinterpret_cast<const double *>(&vec);
     std::cout << "[" << *ptr << ", " << *(ptr + 1)
               << "]" << std::endl;
+}
+
+static
+void print_vec_sse(const __m128i& vec)
+{
+    const int *ptr = reinterpret_cast<const int *>(&vec);
+    std::cout << "[" << *ptr << ", " << *(ptr + 1) << ", "
+              << *(ptr + 2) << ", " << *(ptr + 3) << "]" << std::endl;
 }
 #endif
 
@@ -116,6 +132,15 @@ static
 void print_vec_avx(const __m256d& vec)
 {
     const double *ptr = reinterpret_cast<const double *>(&vec);
+    std::cout << "[" << *ptr << ", " << *(ptr + 1) << ", "
+              << *(ptr + 2) << ", " << *(ptr + 3)
+              << "]" << std::endl;
+}
+
+static
+void print_vec_avx(const __m256i& vec)
+{
+    const int *ptr = reinterpret_cast<const int *>(&vec);
     std::cout << "[" << *ptr << ", " << *(ptr + 1) << ", "
               << *(ptr + 2) << ", " << *(ptr + 3)
               << "]" << std::endl;
@@ -158,10 +183,10 @@ gather_avx512_double_gather(const double *ptr, const unsigned *offsets)
     __m512d result;
     __m256i indices;
 
-    PERF_START
+    PERF_START;
     indices = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(offsets));
     result  = _mm512_i32gather_pd(indices, ptr, 8);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -172,10 +197,10 @@ gather_avx512_float_gather(const float *ptr, const unsigned *offsets)
     __m512 result;
     __m512i indices;
 
-    PERF_START
+    PERF_START;
     indices = _mm512_load_epi32(offsets);
     result  = _mm512_i32gather_ps(indices, ptr, 4);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -185,10 +210,10 @@ scatter_avx512_double_scatter(const __m512d& value, double *ptr, const unsigned 
 {
     __m256i indices;
 
-    PERF_START
+    PERF_START;
     indices = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(offsets));
     _mm512_i32scatter_pd(ptr, indices, value, 8);
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
@@ -196,10 +221,10 @@ scatter_avx512_float_scatter(const __m512& value, float *ptr, const unsigned *of
 {
     __m512i indices;
 
-    PERF_START
+    PERF_START;
     indices = _mm512_load_epi32(offsets);
     _mm512_i32scatter_ps(ptr, indices, value, 4);
-    PERF_END
+    PERF_END;
 }
 #endif
 
@@ -211,10 +236,10 @@ gather_avx2_double_gather(const double *ptr, const unsigned *offsets)
     __m256d result;
     __m128i indices;
 
-    PERF_START
+    PERF_START;
     indices = _mm_loadu_si128(reinterpret_cast<const __m128i *>(offsets));
     result  = _mm256_i32gather_pd(ptr, indices, 8);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -225,10 +250,10 @@ gather_avx2_float_gather(const float *ptr, const unsigned *offsets)
     __m256 result;
     __m256i indices;
 
-    PERF_START
+    PERF_START;
     indices = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(offsets));
     result  = _mm256_i32gather_ps(ptr, indices, 4);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -242,14 +267,14 @@ gather_avx_double_insert(const double *ptr, const unsigned *offsets)
     __m256d result;
     __m128d tmp;
 
-    PERF_START
+    PERF_START;
     tmp     = _mm_loadl_pd(tmp, ptr + offsets[0]);
     tmp     = _mm_loadh_pd(tmp, ptr + offsets[1]);
     result  = _mm256_insertf128_pd(result, tmp, 0);
     tmp     = _mm_loadl_pd(tmp, ptr + offsets[2]);
     tmp     = _mm_loadh_pd(tmp, ptr + offsets[3]);
     result  = _mm256_insertf128_pd(result, tmp, 1);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -259,10 +284,10 @@ gather_avx_double_set(const double *ptr, const unsigned *offsets)
 {
     __m256d result;
 
-    PERF_START
+    PERF_START;
     result = _mm256_set_pd(ptr[offsets[3]], ptr[offsets[2]],
                            ptr[offsets[1]], ptr[offsets[0]]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -272,11 +297,11 @@ gather_avx_double_load(const double *ptr, const unsigned *offsets)
 {
     __m256d result;
 
-    PERF_START
+    PERF_START;
     double tmp[4] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]],
                                                     ptr[offsets[2]], ptr[offsets[3]] };
     result = _mm256_load_pd(tmp);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -286,39 +311,39 @@ scatter_avx_double_extract(const __m256d& value, double *ptr, const unsigned *of
 {
     __m128d tmp;
 
-    PERF_START
+    PERF_START;
     tmp = _mm256_extractf128_pd(value, 0);
     _mm_storel_pd(ptr + offsets[0], tmp);
     _mm_storeh_pd(ptr + offsets[1], tmp);
     tmp = _mm256_extractf128_pd(value, 1);
     _mm_storel_pd(ptr + offsets[2], tmp);
     _mm_storeh_pd(ptr + offsets[3], tmp);
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_avx_double_cast(const __m256d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     const double *p = reinterpret_cast<const double *>(&value);
     ptr[offsets[0]] = p[0];
     ptr[offsets[1]] = p[1];
     ptr[offsets[2]] = p[2];
     ptr[offsets[3]] = p[3];
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_avx_double_store(const __m256d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     double tmp[4] __attribute__((aligned (32)));
     _mm256_store_pd(tmp, value);
     ptr[offsets[0]] = tmp[0];
     ptr[offsets[1]] = tmp[1];
     ptr[offsets[2]] = tmp[2];
     ptr[offsets[3]] = tmp[3];
-    PERF_END
+    PERF_END;
 }
 
 __m256 __attribute__((noinline))
@@ -327,7 +352,7 @@ gather_avx_float_insert(const float *ptr, const unsigned *offsets)
     __m256 result;
     __m128 tmp;
 
-    PERF_START
+    PERF_START;
     tmp    = _mm_load_ss(ptr + offsets[0]);
     tmp    = _mm_insert_ps(tmp, _mm_load_ss(ptr + offsets[1]), _MM_MK_INSERTPS_NDX(0,1,0));
     tmp    = _mm_insert_ps(tmp, _mm_load_ss(ptr + offsets[2]), _MM_MK_INSERTPS_NDX(0,2,0));
@@ -338,7 +363,7 @@ gather_avx_float_insert(const float *ptr, const unsigned *offsets)
     tmp    = _mm_insert_ps(tmp, _mm_load_ss(ptr + offsets[6]), _MM_MK_INSERTPS_NDX(0,2,0));
     tmp    = _mm_insert_ps(tmp, _mm_load_ss(ptr + offsets[7]), _MM_MK_INSERTPS_NDX(0,3,0));
     result = _mm256_insertf128_ps(result, tmp, 1);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -364,7 +389,7 @@ gather_avx_float_insert2(const float *ptr, const unsigned *offsets)
     __m256 result;
     __m128 tmp;
 
-    PERF_START
+    PERF_START;
     tmp    = _mm_load_ss(ptr + offsets[0]);
     SHORTVEC_INSERT_PS_AVX(tmp, ptr, offsets[1], _MM_MK_INSERTPS_NDX(0,1,0));
     SHORTVEC_INSERT_PS_AVX(tmp, ptr, offsets[2], _MM_MK_INSERTPS_NDX(0,2,0));
@@ -375,7 +400,7 @@ gather_avx_float_insert2(const float *ptr, const unsigned *offsets)
     SHORTVEC_INSERT_PS_AVX(tmp, ptr, offsets[6], _MM_MK_INSERTPS_NDX(0,2,0));
     SHORTVEC_INSERT_PS_AVX(tmp, ptr, offsets[7], _MM_MK_INSERTPS_NDX(0,3,0));
     result = _mm256_insertf128_ps(result, tmp, 1);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -386,7 +411,7 @@ gather_avx_float_insert3(const float *ptr, const unsigned *offsets)
     __m256 result;
     __m128 tmp1, tmp2;
 
-    PERF_START
+    PERF_START;
     tmp1   = _mm_load_ss(ptr + offsets[0]);
     SHORTVEC_INSERT_PS_AVX(tmp1, ptr, offsets[1], _MM_MK_INSERTPS_NDX(0,1,0));
     tmp2   = _mm_load_ss(ptr + offsets[2]);
@@ -399,7 +424,7 @@ gather_avx_float_insert3(const float *ptr, const unsigned *offsets)
     SHORTVEC_INSERT_PS_AVX(tmp2, ptr, offsets[7], _MM_MK_INSERTPS_NDX(0,1,0));
     tmp1   = _mm_shuffle_ps(tmp1, tmp2, _MM_SHUFFLE(1,0,1,0));
     result = _mm256_insertf128_ps(result, tmp1, 1);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -410,7 +435,7 @@ gather_avx_float_insert4(const float *ptr, const unsigned *offsets)
     __m256 result;
     __m128 tmp;
 
-    PERF_START
+    PERF_START;
 #if !defined(__clang__) || (__clang_major__ >= 3 && __clang_minor__ >= 5)
     tmp    = _mm_load_ss(ptr + offsets[0]);
     tmp    = _mm_insert_ps(tmp, *reinterpret_cast<const __m128 *>(ptr + offsets[1]), _MM_MK_INSERTPS_NDX(0,1,0));
@@ -423,7 +448,7 @@ gather_avx_float_insert4(const float *ptr, const unsigned *offsets)
     tmp    = _mm_insert_ps(tmp, *reinterpret_cast<const __m128 *>(ptr + offsets[7]), _MM_MK_INSERTPS_NDX(0,3,0));
     result = _mm256_insertf128_ps(result, tmp, 1);
 #endif
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -433,12 +458,12 @@ gather_avx_float_set(const float *ptr, const unsigned *offsets)
 {
     __m256 result;
 
-    PERF_START
+    PERF_START;
     result = _mm256_set_ps(ptr[offsets[7]], ptr[offsets[6]],
                            ptr[offsets[5]], ptr[offsets[4]],
                            ptr[offsets[3]], ptr[offsets[2]],
                            ptr[offsets[1]], ptr[offsets[0]]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -446,13 +471,13 @@ gather_avx_float_set(const float *ptr, const unsigned *offsets)
 __m256 __attribute__((noinline))
 gather_avx_float_load(const float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     float tmp[8] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]],
                                                    ptr[offsets[2]], ptr[offsets[3]],
                                                    ptr[offsets[4]], ptr[offsets[5]],
                                                    ptr[offsets[6]], ptr[offsets[7]] };
     __m256 result = _mm256_load_ps(tmp);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -462,7 +487,7 @@ scatter_avx_float_extract(const __m256& value, float *ptr, const unsigned *offse
 {
     __m128 tmp;
 
-    PERF_START
+    PERF_START;
     tmp = _mm256_extractf128_ps(value, 0);
     _MM_EXTRACT_FLOAT(ptr[offsets[0]], tmp, 0);
     _MM_EXTRACT_FLOAT(ptr[offsets[1]], tmp, 1);
@@ -473,13 +498,13 @@ scatter_avx_float_extract(const __m256& value, float *ptr, const unsigned *offse
     _MM_EXTRACT_FLOAT(ptr[offsets[5]], tmp, 1);
     _MM_EXTRACT_FLOAT(ptr[offsets[6]], tmp, 2);
     _MM_EXTRACT_FLOAT(ptr[offsets[7]], tmp, 3);
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_avx_float_cast(const __m256& value, float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     const float *p = reinterpret_cast<const float *>(&value);
     ptr[offsets[0]] = p[0];
     ptr[offsets[1]] = p[1];
@@ -489,13 +514,13 @@ scatter_avx_float_cast(const __m256& value, float *ptr, const unsigned *offsets)
     ptr[offsets[5]] = p[5];
     ptr[offsets[6]] = p[6];
     ptr[offsets[7]] = p[7];
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_avx_float_store(const __m256& value, float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     float tmp[8] __attribute__((aligned (32)));
     _mm256_store_ps(tmp, value);
     ptr[offsets[0]] = tmp[0];
@@ -506,7 +531,7 @@ scatter_avx_float_store(const __m256& value, float *ptr, const unsigned *offsets
     ptr[offsets[5]] = tmp[5];
     ptr[offsets[6]] = tmp[6];
     ptr[offsets[7]] = tmp[7];
-    PERF_END
+    PERF_END;
 }
 #endif
 
@@ -517,10 +542,10 @@ gather_sse4_double_insert(const double *ptr, const unsigned *offsets)
 {
     __m128d result;
 
-    PERF_START
+    PERF_START;
     result = _mm_loadl_pd(result, ptr + offsets[0]);
     result = _mm_loadh_pd(result, ptr + offsets[1]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -530,9 +555,9 @@ gather_sse4_double_set(const double *ptr, const unsigned *offsets)
 {
     __m128d result;
 
-    PERF_START
+    PERF_START;
     result = _mm_set_pd(ptr[offsets[1]], ptr[offsets[0]]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -542,10 +567,10 @@ gather_sse4_double_load(const double *ptr, const unsigned *offsets)
 {
     __m128d result;
 
-    PERF_START
+    PERF_START;
     double tmp[2] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]] };
     result = _mm_load_pd(tmp);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -553,31 +578,31 @@ gather_sse4_double_load(const double *ptr, const unsigned *offsets)
 void __attribute__((noinline))
 scatter_sse4_double_extract(const __m128d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     _mm_storel_pd(ptr + offsets[0], value);
     _mm_storeh_pd(ptr + offsets[1], value);
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse4_double_cast(const __m128d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     const double *p = reinterpret_cast<const double *>(&value);
     ptr[offsets[0]] = p[0];
     ptr[offsets[1]] = p[1];
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse4_double_store(const __m128d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     double tmp[4] __attribute__((aligned (32)));
     _mm_store_pd(tmp, value);
     ptr[offsets[0]] = tmp[0];
     ptr[offsets[1]] = tmp[1];
-    PERF_END
+    PERF_END;
 }
 
 __m128 __attribute__((noinline))
@@ -585,12 +610,12 @@ gather_sse4_float_insert(const float *ptr, const unsigned *offsets)
 {
     __m128 result;
 
-    PERF_START
+    PERF_START;
     result = _mm_load_ss(ptr + offsets[0]);
     result = _mm_insert_ps(result, _mm_load_ss(ptr + offsets[1]), _MM_MK_INSERTPS_NDX(0,1,0));
     result = _mm_insert_ps(result, _mm_load_ss(ptr + offsets[2]), _MM_MK_INSERTPS_NDX(0,2,0));
     result = _mm_insert_ps(result, _mm_load_ss(ptr + offsets[3]), _MM_MK_INSERTPS_NDX(0,3,0));
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -616,12 +641,12 @@ gather_sse4_float_insert2(const float *ptr, const unsigned *offsets)
 {
     __m128 result;
 
-    PERF_START
+    PERF_START;
     result = _mm_load_ss(ptr + offsets[0]);
     SHORTVEC_INSERT_PS(result, ptr, offsets[1], _MM_MK_INSERTPS_NDX(0,1,0));
     SHORTVEC_INSERT_PS(result, ptr, offsets[2], _MM_MK_INSERTPS_NDX(0,2,0));
     SHORTVEC_INSERT_PS(result, ptr, offsets[3], _MM_MK_INSERTPS_NDX(0,3,0));
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -631,14 +656,14 @@ gather_sse4_float_insert3(const float *ptr, const unsigned *offsets)
 {
     __m128 result;
 
-    PERF_START
+    PERF_START;
 #if !defined(__clang__) || (__clang_major__ >= 3 && __clang_minor__ >= 5)
     result = _mm_load_ss(ptr + offsets[0]);
     result = _mm_insert_ps(result, *reinterpret_cast<const __m128 *>(ptr + offsets[1]), _MM_MK_INSERTPS_NDX(0,1,0));
     result = _mm_insert_ps(result, *reinterpret_cast<const __m128 *>(ptr + offsets[2]), _MM_MK_INSERTPS_NDX(0,2,0));
     result = _mm_insert_ps(result, *reinterpret_cast<const __m128 *>(ptr + offsets[3]), _MM_MK_INSERTPS_NDX(0,3,0));
 #endif
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -648,10 +673,10 @@ gather_sse4_float_set(const float *ptr, const unsigned *offsets)
 {
     __m128 result;
 
-    PERF_START
+    PERF_START;
     result = _mm_set_ps(ptr[offsets[3]], ptr[offsets[2]],
                         ptr[offsets[1]], ptr[offsets[0]]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -661,11 +686,11 @@ gather_sse4_float_load(const float *ptr, const unsigned *offsets)
 {
     __m128 result;
 
-    PERF_START
+    PERF_START;
     float tmp[4] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]],
                                                    ptr[offsets[2]], ptr[offsets[3]] };
     result = _mm_load_ps(tmp);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -673,12 +698,12 @@ gather_sse4_float_load(const float *ptr, const unsigned *offsets)
 void __attribute__((noinline))
 scatter_sse4_float_extract(const __m128& value, float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     _MM_EXTRACT_FLOAT(ptr[offsets[0]], value, 0);
     _MM_EXTRACT_FLOAT(ptr[offsets[1]], value, 1);
     _MM_EXTRACT_FLOAT(ptr[offsets[2]], value, 2);
     _MM_EXTRACT_FLOAT(ptr[offsets[3]], value, 3);
-    PERF_END
+    PERF_END;
 }
 
 // little helper
@@ -691,7 +716,7 @@ scatter_sse4_float_extract2(const __m128& value, float *ptr, const unsigned *off
 {
     ExtractResult r1, r2, r3, r4;
 
-    PERF_START
+    PERF_START;
     r1.i = _mm_extract_ps(value, 0);
     r2.i = _mm_extract_ps(value, 1);
     r3.i = _mm_extract_ps(value, 2);
@@ -701,46 +726,46 @@ scatter_sse4_float_extract2(const __m128& value, float *ptr, const unsigned *off
     ptr[offsets[1]] = r2.f;
     ptr[offsets[2]] = r3.f;
     ptr[offsets[3]] = r4.f;
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse4_float_cast(const __m128& value, float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     const float *p = reinterpret_cast<const float *>(&value);
     ptr[offsets[0]] = p[0];
     ptr[offsets[1]] = p[1];
     ptr[offsets[2]] = p[2];
     ptr[offsets[3]] = p[3];
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse4_float_store(const __m128& value, float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     float tmp[4] __attribute__((aligned (32)));
     _mm_store_ps(tmp, value);
     ptr[offsets[0]] = tmp[0];
     ptr[offsets[1]] = tmp[1];
     ptr[offsets[2]] = tmp[2];
     ptr[offsets[3]] = tmp[3];
-    PERF_END
+    PERF_END;
 }
 #endif
 
 // SSE section
-#ifdef __SSE__
+#ifdef __SSE2__
 __m128d __attribute__((noinline))
 gather_sse_double_insert(const double *ptr, const unsigned *offsets)
 {
     __m128d result;
 
-    PERF_START
+    PERF_START;
     result = _mm_loadl_pd(result, ptr + offsets[0]);
     result = _mm_loadh_pd(result, ptr + offsets[1]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -750,9 +775,9 @@ gather_sse_double_set(const double *ptr, const unsigned *offsets)
 {
     __m128d result;
 
-    PERF_START
+    PERF_START;
     result = _mm_set_pd(ptr[offsets[1]], ptr[offsets[0]]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -762,10 +787,10 @@ gather_sse_double_load(const double *ptr, const unsigned *offsets)
 {
     __m128d result;
 
-    PERF_START
+    PERF_START;
     double tmp[2] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]] };
     result = _mm_load_pd(tmp);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -773,31 +798,31 @@ gather_sse_double_load(const double *ptr, const unsigned *offsets)
 void __attribute__((noinline))
 scatter_sse_double_extract(const __m128d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     _mm_storel_pd(ptr + offsets[0], value);
     _mm_storeh_pd(ptr + offsets[1], value);
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse_double_cast(const __m128d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     const double *p = reinterpret_cast<const double *>(&value);
     ptr[offsets[0]] = p[0];
     ptr[offsets[1]] = p[1];
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse_double_store(const __m128d& value, double *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     double tmp[4] __attribute__((aligned (32)));
     _mm_store_pd(tmp, value);
     ptr[offsets[0]] = tmp[0];
     ptr[offsets[1]] = tmp[1];
-    PERF_END
+    PERF_END;
 }
 
 __m128 __attribute__((noinline))
@@ -805,7 +830,7 @@ gather_sse_float_shuffle(const float *ptr, const unsigned *offsets)
 {
     __m128 result, f1, f2, f3, f4;
 
-    PERF_START
+    PERF_START;
     f1 = _mm_load_ss(ptr + offsets[0]);
     f2 = _mm_load_ss(ptr + offsets[1]);
     f3 = _mm_load_ss(ptr + offsets[2]);
@@ -815,7 +840,7 @@ gather_sse_float_shuffle(const float *ptr, const unsigned *offsets)
     f2 = _mm_shuffle_ps(f2, f4, _MM_SHUFFLE(0,1,0,1));
     result = _mm_shuffle_ps(f1, f2, _MM_SHUFFLE(3,1,2,0));
     result = _mm_shuffle_ps(result, result, _MM_SHUFFLE(3,1,2,0));
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -825,7 +850,7 @@ gather_sse_float_unpack(const float *ptr, const unsigned *offsets)
 {
     __m128 result, f1, f2, f3, f4;
 
-    PERF_START
+    PERF_START;
     f1 = _mm_load_ss(ptr + offsets[0]);
     f2 = _mm_load_ss(ptr + offsets[2]);
     // f1: 0 0 3 1
@@ -836,7 +861,7 @@ gather_sse_float_unpack(const float *ptr, const unsigned *offsets)
     f3 = _mm_unpacklo_ps(f3, f4);
     // result: 4 3 2 1
     result = _mm_unpacklo_ps(f1, f3);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -846,10 +871,10 @@ gather_sse_float_set(const float *ptr, const unsigned *offsets)
 {
     __m128 result;
 
-    PERF_START
+    PERF_START;
     result = _mm_set_ps(ptr[offsets[3]], ptr[offsets[2]],
                         ptr[offsets[1]], ptr[offsets[0]]);
-    PERF_END
+    PERF_END;
 
     return result;
 }
@@ -859,11 +884,36 @@ gather_sse_float_load(const float *ptr, const unsigned *offsets)
 {
     __m128 result;
 
-    PERF_START
+    PERF_START;
     float tmp[4] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]],
                                                    ptr[offsets[2]], ptr[offsets[3]] };
     result = _mm_load_ps(tmp);
-    PERF_END
+    PERF_END;
+
+    return result;
+}
+
+__m128i __attribute__((noinline))
+gather_sse_int_load(const int *ptr, const unsigned *offsets)
+{
+    __m128i result;
+    PERF_START;
+    int tmp[4] __attribute__((aligned (32))) = { ptr[offsets[0]], ptr[offsets[1]],
+                                                 ptr[offsets[2]], ptr[offsets[3]] };
+    result = _mm_load_si128(reinterpret_cast<const __m128i *>(tmp));
+    PERF_END;
+
+    return result;
+}
+
+__m128i __attribute__((noinline))
+gather_sse_int_set(const int *ptr, const unsigned *offsets)
+{
+    __m128i result;
+    PERF_START;
+    result = _mm_set_epi32(ptr[offsets[3]], ptr[offsets[2]],
+                           ptr[offsets[1]], ptr[offsets[0]]);
+    PERF_END;
 
     return result;
 }
@@ -873,7 +923,7 @@ scatter_sse_float_shuffle(const __m128& value, float *ptr, const unsigned *offse
 {
     __m128 tmp;
 
-    PERF_START
+    PERF_START;
     // 4 3 2 1
     tmp = value;
     _mm_store_ss(ptr + offsets[0], value);
@@ -884,32 +934,79 @@ scatter_sse_float_shuffle(const __m128& value, float *ptr, const unsigned *offse
     _mm_store_ss(ptr + offsets[2], tmp);
     tmp = _mm_shuffle_ps(tmp, tmp, _MM_SHUFFLE(0,3,2,1));
     _mm_store_ss(ptr + offsets[3], tmp);
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse_float_cast(const __m128& value, float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     const float *p = reinterpret_cast<const float *>(&value);
     ptr[offsets[0]] = p[0];
     ptr[offsets[1]] = p[1];
     ptr[offsets[2]] = p[2];
     ptr[offsets[3]] = p[3];
-    PERF_END
+    PERF_END;
 }
 
 void __attribute__((noinline))
 scatter_sse_float_store(const __m128& value, float *ptr, const unsigned *offsets)
 {
-    PERF_START
+    PERF_START;
     float tmp[4] __attribute__((aligned (32)));
     _mm_store_ps(tmp, value);
     ptr[offsets[0]] = tmp[0];
     ptr[offsets[1]] = tmp[1];
     ptr[offsets[2]] = tmp[2];
     ptr[offsets[3]] = tmp[3];
-    PERF_END
+    PERF_END;
+}
+
+void __attribute__((noinline))
+scatter_sse_int_store(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    std::int32_t tmp[4] __attribute__((aligned (16)));
+    _mm_store_si128(reinterpret_cast<__m128i *>(tmp), value);
+    ptr[offsets[0]] = tmp[0];
+    ptr[offsets[1]] = tmp[1];
+    ptr[offsets[2]] = tmp[2];
+    ptr[offsets[3]] = tmp[3];
+    PERF_END;
+}
+
+void __attribute__((noinline))
+scatter_sse_int_cast(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    const std::int32_t *p = reinterpret_cast<const std::int32_t *>(&value);
+    ptr[offsets[0]] = p[0];
+    ptr[offsets[1]] = p[1];
+    ptr[offsets[2]] = p[2];
+    ptr[offsets[3]] = p[3];
+    PERF_END;
+}
+
+void __attribute__((noinline))
+scatter_sse_int_convert(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    ptr[offsets[0]] = _mm_cvtsi128_si32(value);
+    ptr[offsets[1]] = _mm_cvtsi128_si32(_mm_shuffle_epi32(value, _MM_SHUFFLE(0,3,2,1)));
+    ptr[offsets[2]] = _mm_cvtsi128_si32(_mm_shuffle_epi32(value, _MM_SHUFFLE(1,0,3,2)));
+    ptr[offsets[3]] = _mm_cvtsi128_si32(_mm_shuffle_epi32(value, _MM_SHUFFLE(2,1,0,3)));
+    PERF_END;
+}
+
+void __attribute__((noinline))
+scatter_sse_int_shift(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    ptr[offsets[0]] = _mm_extract_epi16(value, 0) | (_mm_extract_epi16(value, 1) << 16);
+    ptr[offsets[1]] = _mm_extract_epi16(value, 2) | (_mm_extract_epi16(value, 3) << 16);
+    ptr[offsets[2]] = _mm_extract_epi16(value, 4) | (_mm_extract_epi16(value, 5) << 16);
+    ptr[offsets[3]] = _mm_extract_epi16(value, 6) | (_mm_extract_epi16(value, 7) << 16);
+    PERF_END;
 }
 #endif
 
@@ -921,26 +1018,27 @@ int main(int argc, char *argv[])
 
     // do stuff, based on compiler settings
 #if defined (__AVX512F__)
-    methods = "SSE SSE4 AVX AVX2 AVX512";
+    methods = "SSE2 SSE4 AVX AVX2 AVX512";
 #endif
 #if defined(__AVX2__)
-    methods = "SSE SSE4 AVX AVX2";
+    methods = "SSE2 SSE4 AVX AVX2";
 #endif
 #if defined(__AVX__) && !defined(__AVX2__) && !defined(__AVX512F__)
-    methods = "SSE SSE4 AVX";
+    methods = "SSE2 SSE4 AVX";
 #endif
 #if defined(__SSE4_1__) && !defined(__AVX__) && !defined(__AVX2__) && !defined(__AVX512F__)
-    methods = "SSE SSE4";
+    methods = "SSE2 SSE4";
 #endif
-#if defined(__SSE__) && !defined(__SSE4_1__) && !defined(__AVX__) && !defined(__AVX2__) && !defined(__AVX512F__)
-    methods = "SSE";
+#if defined(__SSE2__) && !defined(__SSE4_1__) && !defined(__AVX__) && !defined(__AVX2__) && !defined(__AVX512F__)
+    methods = "SSE2";
 #endif
 
     std::cout << "Gather Test for " << methods << "..." << std::endl;
 
-    // get some user data -> floats
+    // get some user data
     float floats[LEN];
     double doubles[LEN];
+    std::int32_t ints[LEN];
     for (unsigned i = 0; i < LEN; ++i) {
         double tmp;
         if (!(std::cin >> tmp)) {
@@ -949,6 +1047,7 @@ int main(int argc, char *argv[])
         }
         doubles[i] = tmp;
         floats[i] = static_cast<float>(tmp);
+        ints[i] = static_cast<std::int32_t>(tmp);
     }
     // indices!
     unsigned idx[] __attribute__ ((aligned (64)))
@@ -956,9 +1055,10 @@ int main(int argc, char *argv[])
     // scatter
     float fscatter[LEN];
     double dscatter[LEN];
+    std::int32_t iscatter[LEN];
 
     // call some methods: first of all, call sse methods...
-#ifdef __SSE__
+#ifdef __SSE2__
     {
         __m128d r1 = gather_sse_double_insert(doubles, idx);
         __m128d r2 = gather_sse_double_load(doubles, idx);
@@ -967,23 +1067,33 @@ int main(int argc, char *argv[])
         __m128  r5 = gather_sse_float_unpack(floats, idx);
         __m128  r6 = gather_sse_float_set(floats, idx);
         __m128  r7 = gather_sse_float_load(floats, idx);
-        std::cout << "SSE: Gather: Double" << std::endl;
+        __m128i r8 = gather_sse_int_load(ints, idx);
+        __m128i r9 = gather_sse_int_set(ints, idx);
+        std::cout << "SSE2: Gather: Double" << std::endl;
         print_vec_sse(r1);
         print_vec_sse(r2);
         print_vec_sse(r3);
-        std::cout << "SSE: Gather: Float" << std::endl;
+        std::cout << "SSE2: Gather: Float" << std::endl;
         print_vec_sse(r4);
         print_vec_sse(r5);
         print_vec_sse(r6);
         print_vec_sse(r7);
-        std::cout << "SSE: Scatter: Double" << std::endl;
+        std::cout << "SSE2: Gather: Int32" << std::endl;
+        print_vec_sse(r8);
+        print_vec_sse(r9);
+        std::cout << "SSE2: Scatter: Double" << std::endl;
         SCATTER_DOUBLE(r1, scatter_sse_double_extract);
         SCATTER_DOUBLE(r1, scatter_sse_double_cast);
         SCATTER_DOUBLE(r1, scatter_sse_double_store);
-        std::cout << "SSE: Scatter: Float" << std::endl;
+        std::cout << "SSE2: Scatter: Float" << std::endl;
         SCATTER_FLOAT(r4, scatter_sse_float_shuffle);
         SCATTER_FLOAT(r4, scatter_sse_float_cast);
         SCATTER_FLOAT(r4, scatter_sse_float_store);
+        std::cout << "SSE2: Scatter: Int32" << std::endl;
+        SCATTER_INT32(r8, scatter_sse_int_store);
+        SCATTER_INT32(r8, scatter_sse_int_cast);
+        SCATTER_INT32(r8, scatter_sse_int_convert);
+        SCATTER_INT32(r8, scatter_sse_int_shift);
     }
 #endif
 
