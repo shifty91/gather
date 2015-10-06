@@ -894,7 +894,7 @@ gather_sse_float_load(const float *ptr, const unsigned *offsets)
 }
 
 __m128i __attribute__((noinline))
-gather_sse_int_load(const int *ptr, const unsigned *offsets)
+gather_sse_int_load(const std::int32_t *ptr, const unsigned *offsets)
 {
     __m128i result;
     PERF_START;
@@ -907,7 +907,7 @@ gather_sse_int_load(const int *ptr, const unsigned *offsets)
 }
 
 __m128i __attribute__((noinline))
-gather_sse_int_set(const int *ptr, const unsigned *offsets)
+gather_sse_int_set(const std::int32_t *ptr, const unsigned *offsets)
 {
     __m128i result;
     PERF_START;
@@ -916,6 +916,40 @@ gather_sse_int_set(const int *ptr, const unsigned *offsets)
     PERF_END;
 
     return result;
+}
+
+__m128i __attribute__((noinline))
+gather_sse_int_shift(const std::int32_t *ptr, const unsigned *offsets)
+{
+    __m128i result;
+    PERF_START;
+    result = _mm_insert_epi16(result,  ptr[offsets[0]] & 0x0000ffff, 0);
+    result = _mm_insert_epi16(result, (ptr[offsets[0]] & 0xffff0000) >> 16, 1);
+    result = _mm_insert_epi16(result,  ptr[offsets[1]] & 0x0000ffff, 2);
+    result = _mm_insert_epi16(result, (ptr[offsets[1]] & 0xffff0000) >> 16, 3);
+    result = _mm_insert_epi16(result,  ptr[offsets[2]] & 0x0000ffff, 4);
+    result = _mm_insert_epi16(result, (ptr[offsets[2]] & 0xffff0000) >> 16, 5);
+    result = _mm_insert_epi16(result,  ptr[offsets[3]] & 0x0000ffff, 6);
+    result = _mm_insert_epi16(result, (ptr[offsets[3]] & 0xffff0000) >> 16, 7);
+    PERF_END;
+
+    return result;
+}
+
+__m128i __attribute__((noinline))
+gather_sse_int_unpack(const std::int32_t *ptr, const unsigned *offsets)
+{
+    PERF_START;
+    __m128i i1 = _mm_cvtsi32_si128(ptr[offsets[0]]);
+    __m128i i2 = _mm_cvtsi32_si128(ptr[offsets[1]]);
+    __m128i i3 = _mm_cvtsi32_si128(ptr[offsets[2]]);
+    __m128i i4 = _mm_cvtsi32_si128(ptr[offsets[3]]);
+    i1 = _mm_unpacklo_epi32(i1, i3);
+    i3 = _mm_unpacklo_epi32(i2, i4);
+    i1 = _mm_unpacklo_epi32(i1, i3);
+    PERF_END;
+
+    return i1;
 }
 
 void __attribute__((noinline))
@@ -1060,15 +1094,17 @@ int main(int argc, char *argv[])
     // call some methods: first of all, call sse methods...
 #ifdef __SSE2__
     {
-        __m128d r1 = gather_sse_double_insert(doubles, idx);
-        __m128d r2 = gather_sse_double_load(doubles, idx);
-        __m128d r3 = gather_sse_double_set(doubles, idx);
-        __m128  r4 = gather_sse_float_shuffle(floats, idx);
-        __m128  r5 = gather_sse_float_unpack(floats, idx);
-        __m128  r6 = gather_sse_float_set(floats, idx);
-        __m128  r7 = gather_sse_float_load(floats, idx);
-        __m128i r8 = gather_sse_int_load(ints, idx);
-        __m128i r9 = gather_sse_int_set(ints, idx);
+        __m128d r1  = gather_sse_double_insert(doubles, idx);
+        __m128d r2  = gather_sse_double_load(doubles, idx);
+        __m128d r3  = gather_sse_double_set(doubles, idx);
+        __m128  r4  = gather_sse_float_shuffle(floats, idx);
+        __m128  r5  = gather_sse_float_unpack(floats, idx);
+        __m128  r6  = gather_sse_float_set(floats, idx);
+        __m128  r7  = gather_sse_float_load(floats, idx);
+        __m128i r8  = gather_sse_int_load(ints, idx);
+        __m128i r9  = gather_sse_int_set(ints, idx);
+        __m128i r10 = gather_sse_int_shift(ints, idx);
+        __m128i r11 = gather_sse_int_unpack(ints, idx);
         std::cout << "SSE2: Gather: Double" << std::endl;
         print_vec_sse(r1);
         print_vec_sse(r2);
@@ -1081,6 +1117,8 @@ int main(int argc, char *argv[])
         std::cout << "SSE2: Gather: Int32" << std::endl;
         print_vec_sse(r8);
         print_vec_sse(r9);
+        print_vec_sse(r10);
+        print_vec_sse(r11);
         std::cout << "SSE2: Scatter: Double" << std::endl;
         SCATTER_DOUBLE(r1, scatter_sse_double_extract);
         SCATTER_DOUBLE(r1, scatter_sse_double_cast);
