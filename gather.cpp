@@ -26,6 +26,32 @@
 #endif
 
 /**
+ * Macros for disabling specific warnings.
+ */
+#if defined(__GNUC__) && !defined(__clang__)
+#define DISABLE_WARNING_UNINITIALIZED             \
+    _Pragma("GCC diagnostic push")                         \
+    _Pragma("GCC diagnostic ignored \"-Wuninitialized\"")
+#define ENABLE_WARNING_UNINITIALIZED   \
+    _Pragma("GCC diagnostic pop")
+#endif
+
+#ifdef __clang__
+#define DISABLE_WARNING_UNINITIALIZED              \
+    _Pragma("clang diagnostic push")                        \
+    _Pragma("clang diagnostic ignored \"-Wuninitialized\"")
+#define ENABLE_WARNING_UNINITIALIZED   \
+    _Pragma("clang diagnostic pop")
+#endif
+
+#ifndef DISABLE_WARNING_UNINITIALIZED
+#define DISABLE_WARNING_UNINITIALIZED
+#endif
+#ifndef ENABLE_WARNING_UNINITIALIZED
+#define ENABLE_WARNING_UNINITIALIZED
+#endif
+
+/**
  * This measurement idea comes from:
  * http://www.intel.com/content/dam/www/public/us/en/documents/white-papers/ia-32-ia-64-benchmark-code-execution-paper.pdf
  */
@@ -261,6 +287,7 @@ gather_avx2_float_gather(const float *ptr, const unsigned *offsets)
 
 // AVX section
 #ifdef __AVX__
+DISABLE_WARNING_UNINITIALIZED
 __m256d __attribute__((noinline))
 gather_avx_double_insert(const double *ptr, const unsigned *offsets)
 {
@@ -278,6 +305,7 @@ gather_avx_double_insert(const double *ptr, const unsigned *offsets)
 
     return result;
 }
+ENABLE_WARNING_UNINITIALIZED
 
 __m256d __attribute__((noinline))
 gather_avx_double_set(const double *ptr, const unsigned *offsets)
@@ -346,6 +374,7 @@ scatter_avx_double_store(const __m256d& value, double *ptr, const unsigned *offs
     PERF_END;
 }
 
+DISABLE_WARNING_UNINITIALIZED
 __m256 __attribute__((noinline))
 gather_avx_float_insert(const float *ptr, const unsigned *offsets)
 {
@@ -367,6 +396,7 @@ gather_avx_float_insert(const float *ptr, const unsigned *offsets)
 
     return result;
 }
+ENABLE_WARNING_UNINITIALIZED
 
 /**
  * Same as above just for AVX.
@@ -383,6 +413,7 @@ gather_avx_float_insert(const float *ptr, const unsigned *offsets)
                       : "+x" (a) : "N" (idx), "r" (base), "r" (offset) : "memory"); \
     } while (0)
 
+DISABLE_WARNING_UNINITIALIZED
 __m256 __attribute__((noinline))
 gather_avx_float_insert2(const float *ptr, const unsigned *offsets)
 {
@@ -452,6 +483,7 @@ gather_avx_float_insert4(const float *ptr, const unsigned *offsets)
 
     return result;
 }
+ENABLE_WARNING_UNINITIALIZED
 
 __m256 __attribute__((noinline))
 gather_avx_float_set(const float *ptr, const unsigned *offsets)
@@ -537,6 +569,7 @@ scatter_avx_float_store(const __m256& value, float *ptr, const unsigned *offsets
 
 // SSE4 section
 #ifdef __SSE4_1__
+DISABLE_WARNING_UNINITIALIZED
 __m128d __attribute__((noinline))
 gather_sse4_double_insert(const double *ptr, const unsigned *offsets)
 {
@@ -549,6 +582,7 @@ gather_sse4_double_insert(const double *ptr, const unsigned *offsets)
 
     return result;
 }
+ENABLE_WARNING_UNINITIALIZED
 
 __m128d __attribute__((noinline))
 gather_sse4_double_set(const double *ptr, const unsigned *offsets)
@@ -779,6 +813,7 @@ gather_sse4_int_set(const std::int32_t *ptr, const unsigned *offsets)
     return result;
 }
 
+DISABLE_WARNING_UNINITIALIZED
 __m128i __attribute__((noinline))
 gather_sse4_int_insert(const std::int32_t *ptr, const unsigned *offsets)
 {
@@ -792,6 +827,7 @@ gather_sse4_int_insert(const std::int32_t *ptr, const unsigned *offsets)
 
     return result;
 }
+ENABLE_WARNING_UNINITIALIZED
 
 void __attribute__((noinline))
 scatter_sse4_int_store(const __m128i& value, std::int32_t *ptr, const unsigned *offsets)
@@ -832,6 +868,7 @@ scatter_sse4_int_extract(const __m128i& value, std::int32_t *ptr, const unsigned
 
 // SSE section
 #ifdef __SSE2__
+DISABLE_WARNING_UNINITIALIZED
 __m128d __attribute__((noinline))
 gather_sse_double_insert(const double *ptr, const unsigned *offsets)
 {
@@ -844,6 +881,7 @@ gather_sse_double_insert(const double *ptr, const unsigned *offsets)
 
     return result;
 }
+ENABLE_WARNING_UNINITIALIZED
 
 __m128d __attribute__((noinline))
 gather_sse_double_set(const double *ptr, const unsigned *offsets)
@@ -993,6 +1031,7 @@ gather_sse_int_set(const std::int32_t *ptr, const unsigned *offsets)
     return result;
 }
 
+DISABLE_WARNING_UNINITIALIZED
 __m128i __attribute__((noinline))
 gather_sse_int_shift(const std::int32_t *ptr, const unsigned *offsets)
 {
@@ -1010,6 +1049,7 @@ gather_sse_int_shift(const std::int32_t *ptr, const unsigned *offsets)
 
     return result;
 }
+ENABLE_WARNING_UNINITIALIZED
 
 __m128i __attribute__((noinline))
 gather_sse_int_unpack(const std::int32_t *ptr, const unsigned *offsets)
