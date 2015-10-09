@@ -38,7 +38,7 @@
                   "mov %%edx, %0\n\t"                                   \
                   "mov %%eax, %1\n\t": "=r" (high), "=r" (low)::        \
                   "%rax", "%rbx", "%rcx", "%rdx");                      \
-    t1 = static_cast<uint64_t>(low) | (static_cast<uint64_t>(high) << 32);
+    t1 = static_cast<std::uint64_t>(low) | (static_cast<std::uint64_t>(high) << 32);
 #else
 #define PERF_START
 #endif
@@ -50,7 +50,7 @@
                  "mov %%eax, %1\n\t"                                    \
                  "cpuid\n\t": "=r" (high), "=r" (low)::                 \
                  "%rax", "%rbx", "%rcx", "%rdx");                       \
-    t2 = static_cast<uint64_t>(low) | (static_cast<uint64_t>(high) << 32); \
+    t2 = static_cast<std::uint64_t>(low) | (static_cast<std::uint64_t>(high) << 32); \
     std::cout << "Perf: " << __func__ << ": " << (t2 - t1) << std::endl;
 #else
 #define PERF_END
