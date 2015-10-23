@@ -57,8 +57,8 @@
  */
 #ifdef WITH_PERF
 #define PERF_START                                                      \
-    uint64_t t1, t2;                                                    \
-    int32_t low, high;                                                  \
+    std::uint64_t t1, t2;                                               \
+    std::int32_t low, high;                                             \
     asm volatile ("cpuid\n\t"                                           \
                   "rdtsc\n\t"                                           \
                   "mov %%edx, %0\n\t"                                   \
