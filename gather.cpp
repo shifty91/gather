@@ -162,15 +162,6 @@ void print_vec_avx(const __m256d& vec)
               << *(ptr + 2) << ", " << *(ptr + 3)
               << "]" << std::endl;
 }
-
-static
-void print_vec_avx(const __m256i& vec)
-{
-    const int *ptr = reinterpret_cast<const int *>(&vec);
-    std::cout << "[" << *ptr << ", " << *(ptr + 1) << ", "
-              << *(ptr + 2) << ", " << *(ptr + 3)
-              << "]" << std::endl;
-}
 #endif
 
 #ifdef __AVX512F__
